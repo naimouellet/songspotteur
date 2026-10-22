@@ -36,7 +36,7 @@
   // ---------- Extraits ----------
   const stages = () => STAGES;
   const REVEAL_LEN = 15;
-  const QUESTION = "Quelle est cette chanson ?";
+  const QUESTION = "Quelle est cette chanson\u202f?"; // espace fine insécable : le « ? » ne passe jamais seul à la ligne
   const HINT = "Écoute l'extrait, puis devine le titre.";
 
   // Une capsule par durée d'extrait, colorée selon ce qui s'est passé.

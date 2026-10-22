@@ -17,9 +17,10 @@ window.Viz = (() => {
 
   function resize() {
     dpr = Math.min(2, window.devicePixelRatio || 1);
-    const r = canvas.getBoundingClientRect();
-    w = Math.max(1, Math.round(r.width * dpr));
-    h = Math.max(1, Math.round(r.height * dpr));
+    // Taille de mise en page, pas getBoundingClientRect : la pochette est réduite à 94 %
+    // au repos (transform), et le canvas serait alors dessiné trop petit puis étiré.
+    w = Math.max(1, Math.round(canvas.clientWidth * dpr));
+    h = Math.max(1, Math.round(canvas.clientHeight * dpr));
     canvas.width = w;
     canvas.height = h;
   }
