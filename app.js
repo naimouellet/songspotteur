@@ -415,8 +415,6 @@
 
   $("apple").addEventListener("click", (e) => { e.preventDefault(); openUrl($("apple").href); });
 
-  // Avec un gain, les points montent en comptant plutôt que de sauter.
-  // Les chansons de la partie, la plus récente d'abord : cover, titre, et à quel extrait on l'a eue.
   // Les chansons de la partie, dans l'ordre : la plus récente s'ajoute à la fin,
   // et la bande glisse doucement jusqu'à elle.
   const HISTORY_MAX = 24;
@@ -481,6 +479,7 @@
     return li;
   }
 
+  // Avec un gain, les points montent en comptant plutôt que de sauter.
   function renderScore(gain = 0) {
     const el = $("points");
     const end = state.points;

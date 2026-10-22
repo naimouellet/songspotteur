@@ -81,7 +81,6 @@ svg { fill: currentColor; stroke: currentColor; }
 #viz { position: absolute; inset: 0; width: 100%; height: 100%; transition: opacity .6s ease; }
 .artwork.revealed #viz { opacity: 0; }
 
-/* Equalizer: idle bars rest low, they bounce while a clip plays. */
 
 /* Heading: becomes title / artist once revealed */
 .heading { min-height: 92px; }
@@ -200,7 +199,7 @@ svg { fill: currentColor; stroke: currentColor; }
 #suggest li:only-child { border-radius: 12px; }
 #suggest li small { color: var(--label-2); font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 45%; }
 #suggest li[aria-selected="true"] { background: rgba(255, 255, 255, .1); }
-/* Comme dans iOS : pas de séparateur contre la rangée surlignée (sinon un cran de 16 px apparaît à gauche). */
+/* As in iOS: no separator against the highlighted row (otherwise a 16px notch shows on the left). */
 #suggest li[aria-selected="true"]::before, #suggest li[aria-selected="true"] + li::before { display: none; }
 
 .attempts { margin-top: -6px; }
