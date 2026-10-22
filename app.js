@@ -169,7 +169,8 @@
     const src = ac.createBufferSource();
     const gain = ac.createGain();
     src.buffer = state.buffer;
-    src.connect(gain).connect(ac.destination);
+    src.connect(gain);
+    window.Viz ? Viz.connect(ac, gain) : gain.connect(ac.destination);
     // Micro-fondu pour éviter les clics sur les extraits ultra-courts.
     const t0 = ac.currentTime + 0.02;
     const fade = Math.min(0.008, seconds / 4);
@@ -240,6 +241,7 @@
     document.querySelector(".heading").classList.remove("revealed");
     $("artwork").classList.remove("revealed");
     $("artwork").classList.add("idle");
+    window.Viz?.setActive(true);
     $("guess").value = "";
     $("guess").disabled = $("skip").disabled = !state.song;
     closeSuggest();
@@ -343,6 +345,8 @@
     $("art").alt = `Pochette — ${s.title}`;
     $("artwork").classList.remove("idle");
     $("artwork").classList.add("revealed");
+    // Le visualiseur s'arrête une fois la pochette affichée (après le fondu).
+    setTimeout(() => { if (state.over) window.Viz?.setActive(false); }, 700);
     setBackdrop(s.art);
     state.history.unshift({ song: s, won, stage });
     renderHistory();
