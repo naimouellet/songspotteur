@@ -1,7 +1,6 @@
-// Visualiseur « floraison spectrale » affiché à la place de la pochette.
-//
-// Trois anneaux lumineux dont la forme suit le spectre de l'extrait, reflété en
-// quatre pétales. Chaque point de contrôle est un petit ressort amorti : le
+// Visualiseur affiché à la place de la pochette, volontairement sobre :
+// un trait blanc fin et un second anneau très pâle dont la forme suit le spectre
+// de l'extrait, reflété en quatre pétales. Chaque point de contrôle est un petit ressort amorti : le
 // mouvement est élastique plutôt que saccadé. Les contours sont tracés avec une
 // spline de Catmull-Rom pour rester lisses.
 window.Viz = (() => {
@@ -14,20 +13,18 @@ window.Viz = (() => {
   const F_LO = 60, F_HI = 8000;   // plage utile, en Hz
 
   const RINGS = [
-    { hue: 222, sat: 95, light: 64, size: 0.15, reach: 0.19, spin: 0.10, shift: 0 },
-    { hue: 268, sat: 85, light: 72, size: 0.19, reach: 0.16, spin: -0.07, shift: 3 },
-    { hue: 188, sat: 95, light: 68, size: 0.23, reach: 0.13, spin: 0.05, shift: 6 },
+    { alpha: 0.85, width: 1.25, size: 0.2, reach: 0.09, spin: 0.05, shift: 0 },
+    { alpha: 0.22, width: 1, size: 0.26, reach: 0.06, spin: -0.03, shift: 5 },
   ];
 
   // État des ressorts : une position et une vitesse par bande.
   const pos = new Float32Array(BANDS);
   const vel = new Float32Array(BANDS);
   const angle = RINGS.map((_, i) => i * 0.7);
-  const sparks = [];
 
   let analyser = null, freq = null, binHz = 0, ranges = null;
   let w = 0, h = 0, dpr = 1, raf = 0, last = 0;
-  let energy = 0, bass = 0, bassAvg = 0;
+  let bass = 0;
 
   function resize() {
     dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -64,7 +61,6 @@ window.Viz = (() => {
   function update(t, dt) {
     if (analyser) analyser.getByteFrequencyData(freq);
     const k = Math.min(3, dt * 60); // normalise pour 60 i/s
-    let sum = 0;
     for (let i = 0; i < BANDS; i++) {
       let a = 0;
       if (freq) {
@@ -81,11 +77,8 @@ window.Viz = (() => {
       vel[i] += (target - pos[i]) * 0.16 * k;
       vel[i] *= Math.pow(0.74, k);
       pos[i] += vel[i] * k;
-      sum += pos[i];
     }
-    energy += (sum / BANDS - energy) * 0.15 * k;
     bass = (pos[0] + pos[1]) / 2;
-    bassAvg += (bass - bassAvg) * 0.05 * k;
   }
 
   // Valeur d'un point de contrôle : le spectre reflété en quatre pétales.
@@ -115,12 +108,10 @@ window.Viz = (() => {
       }
     }
     g.closePath();
-    const c = (a) => `hsla(${ring.hue}, ${ring.sat}%, ${ring.light}%, ${a})`;
-    g.fillStyle = c(0.012 + energy * 0.012);
-    g.fill();
     g.lineJoin = "round";
-    g.lineWidth = 7 * dpr; g.strokeStyle = c(0.05 + energy * 0.05); g.stroke();  // halo
-    g.lineWidth = 1.5 * dpr; g.strokeStyle = c(0.9); g.stroke();                // trait
+    g.lineWidth = ring.width * dpr;
+    g.strokeStyle = `rgba(255, 255, 255, ${ring.alpha})`;
+    g.stroke();
   }
 
   function frame(now) {
@@ -131,46 +122,22 @@ window.Viz = (() => {
     const t = now / 1000;
     update(t, dt);
 
-    // La rotation accélère avec l'énergie de la musique.
-    RINGS.forEach((r, i) => { angle[i] += r.spin * (1 + energy * 4) * dt; });
+    RINGS.forEach((r, i) => { angle[i] += r.spin * dt; });
 
     const cx = w / 2, cy = h / 2, m = Math.min(w, h);
 
-    // Traînées courtes : on estompe l'image précédente plutôt que de l'effacer.
-    g.globalCompositeOperation = "destination-out";
-    g.fillStyle = `rgba(0, 0, 0, ${Math.min(1, 0.28 * dt * 60)})`;
-    g.fillRect(0, 0, w, h);
-    g.globalCompositeOperation = "lighter";
+    g.clearRect(0, 0, w, h);
 
-    // Cœur discret qui gonfle avec les basses.
-    const core = m * (0.06 + bass * 0.06);
-    const glow = g.createRadialGradient(cx, cy, 0, cx, cy, core);
-    glow.addColorStop(0, `rgba(200, 215, 255, ${0.08 + bass * 0.14})`);
-    glow.addColorStop(1, "rgba(90, 120, 255, 0)");
+    // Voile bleu très léger au centre, qui s'éclaire à peine avec les basses.
+    const veil = m * 0.3;
+    const glow = g.createRadialGradient(cx, cy, 0, cx, cy, veil);
+    glow.addColorStop(0, `rgba(90, 130, 255, ${0.06 + bass * 0.08})`);
+    glow.addColorStop(1, "rgba(90, 130, 255, 0)");
     g.fillStyle = glow;
-    g.fillRect(cx - core, cy - core, core * 2, core * 2);
+    g.fillRect(cx - veil, cy - veil, veil * 2, veil * 2);
 
     RINGS.forEach((r, i) => drawRing(r, i, cx, cy, m));
 
-    // Quelques étincelles sur les attaques nettes de basse.
-    if (bass > bassAvg + 0.18 && bass > 0.35 && sparks.length < 40) {
-      for (let i = 0; i < 6; i++) {
-        const a = Math.random() * Math.PI * 2, s = (40 + Math.random() * 90) * dpr;
-        const r0 = m * (0.17 + bass * 0.15);
-        sparks.push({ x: cx + Math.cos(a) * r0, y: cy + Math.sin(a) * r0, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 1, hue: RINGS[i % 3].hue });
-      }
-      bassAvg = bass; // une seule gerbe par attaque
-    }
-    for (let i = sparks.length - 1; i >= 0; i--) {
-      const p = sparks[i];
-      p.x += p.vx * dt; p.y += p.vy * dt;
-      p.vx *= Math.pow(0.9, dt * 60); p.vy *= Math.pow(0.9, dt * 60);
-      p.life -= dt * 1.4;
-      if (p.life <= 0) { sparks.splice(i, 1); continue; }
-      g.fillStyle = `hsla(${p.hue}, 95%, 78%, ${p.life * 0.9})`;
-      g.beginPath(); g.arc(p.x, p.y, 1.4 * dpr, 0, Math.PI * 2); g.fill();
-    }
-    g.globalCompositeOperation = "source-over";
   }
 
   // Tourne seulement tant que la pochette est cachée.
