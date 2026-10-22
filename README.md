@@ -10,7 +10,7 @@ Inspiré de [songspot](https://songspot.co), mais uniquement avec de la musique 
 
 1. Appuie sur lecture : tu entends les **0,5 premières secondes** de la chanson.
 2. Tape le titre dans le champ de recherche et choisis-le dans les suggestions.
-3. Pas sûr ? **Extrait plus long** débloque le prochain extrait : 0,5 s → 2 s → 4 s → 8 s.
+3. Pas sûr ? **Extrait plus long** débloque le prochain extrait : 0,5 s → 2 s → 4 s → 8 s → 16 s.
 4. Un mauvais essai débloque aussi l'extrait suivant.
 5. Après le dernier extrait, **Je ne sais pas** révèle la réponse.
 
@@ -20,6 +20,7 @@ Inspiré de [songspot](https://songspot.co), mais uniquement avec de la musique 
 | 2 s | 75 |
 | 4 s | 50 |
 | 8 s | 25 |
+| 16 s | 10 |
 
 Les bonnes réponses d'affilée font monter ta série. Une fois la réponse révélée, la chanson joue pendant 15 secondes et le bouton **Ouvrir dans Musique** l'ouvre dans Apple Music.
 

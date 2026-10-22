@@ -3,8 +3,8 @@
   const $ = (id) => document.getElementById(id);
 
   // Durées d'extrait, de la plus courte à la plus longue, et points selon l'étape.
-  const STAGES = [0.5, 2, 4, 8];
-  const POINTS = [100, 75, 50, 25];
+  const STAGES = [0.5, 2, 4, 8, 16];
+  const POINTS = [100, 75, 50, 25, 10];
 
   const store = {
     get(k, d) { try { const v = localStorage.getItem("songspotteur:" + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
@@ -34,7 +34,8 @@
   const fmt = (s) => `${String(s).replace(".", ",")} s`;
 
   // ---------- Extraits ----------
-  const stages = () => STAGES;
+  // Durées offertes pour la chanson en cours : on retire celles que l'aperçu ne couvre pas.
+  const stages = () => state.stages || STAGES;
   const REVEAL_LEN = 15;
   const QUESTION = "Quelle est cette chanson\u202f?"; // espace fine insécable : le « ? » ne passe jamais seul à la ligne
   const HINT = "Écoute l'extrait, puis devine le titre.";
@@ -157,8 +158,8 @@
     }
     const typical = [...rms].sort((a, b) => a - b)[Math.floor(rms.length * 0.6)] || 0;
     const first = rms.findIndex((v) => v >= typical * 0.5);
-    // On garde 15 s d'écoute possibles après le point de départ.
-    return Math.min(Math.max(0, first) * 0.05, Math.max(0, buf.duration - 15.5));
+    // On garde de quoi jouer l'extrait le plus long après le point de départ.
+    return Math.min(Math.max(0, first) * 0.05, Math.max(0, buf.duration - STAGES.at(-1) - 0.5));
   }
 
   function play(seconds, barIndex = state.stage) {
@@ -225,6 +226,7 @@
     state.over = false;
     state.buffer = null;
     state.results = [];
+    state.stages = null;
     state.guessed = new Set();
     const pre = preload;
     preload = null;
@@ -258,6 +260,9 @@
       if (token !== loadToken) return;
       state.buffer = buf;
       state.offset = loudStart(buf);
+      const room = buf.duration - state.offset;
+      state.stages = STAGES.filter((t, i) => i === 0 || t <= room);
+      renderTimeline();
       setStatus("Prêt");
       $("play").classList.remove("loading");
       if (interacted) play(stages()[0]);
