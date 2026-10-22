@@ -200,6 +200,8 @@ svg { fill: currentColor; stroke: currentColor; }
 #suggest li:only-child { border-radius: 12px; }
 #suggest li small { color: var(--label-2); font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 45%; }
 #suggest li[aria-selected="true"] { background: rgba(255, 255, 255, .1); }
+/* Comme dans iOS : pas de séparateur contre la rangée surlignée (sinon un cran de 16 px apparaît à gauche). */
+#suggest li[aria-selected="true"]::before, #suggest li[aria-selected="true"] + li::before { display: none; }
 
 .attempts { margin-top: -6px; }
 .attempts li { align-items: center; justify-content: flex-start; font-size: 15px; }

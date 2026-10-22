@@ -490,6 +490,8 @@
       small.textContent = c.song.artist;
       li.append(small);
       li.onmousedown = (e) => { e.preventDefault(); choose(i); };
+      // La sélection suit la souris, comme au clavier.
+      li.onmousemove = () => { if (active !== i) highlight(i); };
       ul.append(li);
     });
     ul.hidden = false;
