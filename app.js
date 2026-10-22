@@ -236,6 +236,7 @@
     $("attempts").innerHTML = "";
     $("reveal").hidden = true;
     $("searchBox").hidden = false;
+    $("searchBox").classList.remove("shake");
     $("verdict").hidden = true;
     $("songMeta").hidden = true;
     $("songTitle").textContent = QUESTION;
@@ -523,7 +524,11 @@
 
   // Bouton d'effacement maison : visible seulement quand il y a du texte.
   const syncClear = () => { $("clear").hidden = !$("guess").value; };
-  $("guess").addEventListener("input", () => { syncClear(); renderSuggest(); });
+  // Le contour rouge d'un mauvais essai s'efface dès qu'on revient dans le champ.
+  const clearWrong = () => $("searchBox").classList.remove("shake");
+  $("searchBox").addEventListener("pointerdown", clearWrong);
+  $("guess").addEventListener("focus", clearWrong);
+  $("guess").addEventListener("input", () => { clearWrong(); syncClear(); renderSuggest(); });
   $("clear").addEventListener("pointerdown", (e) => e.preventDefault()); // garde le focus dans le champ
   $("clear").onclick = () => { $("guess").value = ""; syncClear(); closeSuggest(); $("guess").focus(); };
   $("guess").addEventListener("blur", () => setTimeout(closeSuggest, 100));
