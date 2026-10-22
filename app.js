@@ -1,0 +1,522 @@
+(() => {
+  const SONGS = window.SONGS || [];
+  const $ = (id) => document.getElementById(id);
+
+  // Durées d'extrait, de la plus courte à la plus longue, et points selon l'étape.
+  const STAGES = [0.5, 2, 4, 8];
+  const POINTS = [100, 75, 50, 25];
+
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem("songspotteur:" + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+    set(k, v) { try { localStorage.setItem("songspotteur:" + k, JSON.stringify(v)); } catch {} },
+  };
+
+  const state = {
+    points: store.get("points", 0),
+    streak: store.get("streak", 0),
+    round: 0,
+    results: [],
+    history: [],
+    song: null,
+    buffer: null,
+    offset: 0,
+    stage: 0,
+    over: false,
+    recent: [],
+    source: null,
+    raf: 0,
+  };
+
+  let ctx = null;
+  const audio = () => (ctx ||= new (window.AudioContext || window.webkitAudioContext)());
+
+  const norm = (s) => s.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/œ/g, "oe").replace(/[^a-z0-9]+/g, " ").trim();
+  const fmt = (s) => `${String(s).replace(".", ",")} s`;
+
+  // ---------- Extraits ----------
+  const stages = () => STAGES;
+  const REVEAL_LEN = 15;
+  const QUESTION = "Quelle est cette chanson ?";
+  const HINT = "Écoute l'extrait, puis devine le titre.";
+
+  // Une capsule par durée d'extrait, colorée selon ce qui s'est passé.
+  function renderTimeline() {
+    $("stages").innerHTML = "";
+    stages().forEach((t, i) => {
+      const li = document.createElement("li");
+      const result = state.results[i];
+      if (result) li.className = result;
+      else if (i === state.stage && !state.over) li.className = "current";
+      li.innerHTML = `<span class="track"><i class="bar"></i></span><span class="dur">${fmt(t)}</span>`;
+      if (i <= state.stage && !state.over) {
+        li.classList.add("replay");
+        li.title = `Réécouter ${fmt(t)}`;
+        li.onclick = () => play(t, i);
+      }
+      $("stages").append(li);
+    });
+    const last = state.stage >= stages().length - 1;
+    $("skip").hidden = state.over;
+    $("skip").textContent = last ? "Je ne sais pas" : `Extrait plus long · ${fmt(stages()[state.stage + 1])}`;
+    $("skip").classList.toggle("give-up", last);
+  }
+
+  // Arrière-plan flou : la pochette de la dernière chanson révélée, en fondu.
+  let bgFront = "bgA";
+  function setBackdrop(url) {
+    if (!url) return;
+    const next = bgFront === "bgA" ? "bgB" : "bgA";
+    $(next).style.backgroundImage = `url("${url}")`;
+    $(next).classList.add("on");
+    $(bgFront).classList.remove("on");
+    bgFront = next;
+  }
+
+  // ---------- Audio ----------
+  function stop() {
+    if (state.source) { try { state.source.stop(); } catch {} state.source = null; }
+    cancelAnimationFrame(state.raf);
+    document.querySelectorAll("#stages .bar").forEach((b) => (b.style.width = "0"));
+    $("artwork").classList.remove("playing");
+    $("play").classList.remove("is-playing");
+  }
+
+  // Petits sons de jeu, synthétisés : pas de fichiers à charger.
+  function tone(freq, start, dur, { type = "sine", gain = 0.18, to } = {}) {
+    const ac = audio();
+    const osc = ac.createOscillator();
+    const g = ac.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, start);
+    if (to) osc.frequency.exponentialRampToValueAtTime(to, start + dur);
+    g.gain.setValueAtTime(0, start);
+    g.gain.linearRampToValueAtTime(gain, start + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+    osc.connect(g).connect(ac.destination);
+    osc.start(start);
+    osc.stop(start + dur + 0.02);
+  }
+
+  const sfx = {
+    // Arpège majeur ascendant ; plus long et plus brillant quand c'est trouvé du premier coup.
+    right(stage) {
+      const t = audio().currentTime + 0.03;
+      const notes = stage === 0 ? [523.25, 659.25, 783.99, 1046.5, 1318.5] : [587.33, 739.99, 880, 1174.66];
+      notes.forEach((f, i) => {
+        tone(f, t + i * 0.075, 0.5, { type: "triangle", gain: 0.16 });
+        tone(f * 2, t + i * 0.075, 0.25, { gain: 0.04 });
+      });
+      tone(notes.at(-1), t + notes.length * 0.075, 0.9, { gain: 0.08 });
+    },
+    wrong() {
+      const t = audio().currentTime + 0.02;
+      tone(196, t, 0.22, { type: "triangle", gain: 0.2, to: 110 });
+      tone(98, t, 0.25, { gain: 0.15 });
+    },
+    skip() {
+      tone(1400, audio().currentTime + 0.01, 0.05, { type: "square", gain: 0.03, to: 900 });
+    },
+    lose() {
+      const t = audio().currentTime + 0.05;
+      [392, 349.23, 293.66].forEach((f, i) => tone(f, t + i * 0.16, 0.35, { type: "triangle", gain: 0.12 }));
+    },
+  };
+
+  // L'API Deezer n'envoie pas d'en-têtes CORS : on passe par JSONP pour
+  // obtenir un lien d'aperçu frais (ils expirent après ~15 min).
+  let jsonpId = 0;
+  function previewUrl(id) {
+    return new Promise((resolve, reject) => {
+      const cb = `__dz${++jsonpId}`;
+      const script = document.createElement("script");
+      const done = () => { delete window[cb]; script.remove(); clearTimeout(timer); };
+      const timer = setTimeout(() => { done(); reject(new Error("timeout")); }, 8000);
+      window[cb] = (data) => { done(); data?.preview ? resolve(data.preview) : reject(new Error("no preview")); };
+      script.onerror = () => { done(); reject(new Error("jsonp")); };
+      script.src = `https://api.deezer.com/track/${id}?output=jsonp&callback=${cb}`;
+      document.head.append(script);
+    });
+  }
+
+  async function load(song) {
+    const res = await fetch(await previewUrl(song.id));
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return audio().decodeAudioData(await res.arrayBuffer());
+  }
+
+  // Les aperçus Deezer commencent souvent par un fondu : on saute au premier
+  // moment où le son atteint la moitié du niveau typique de l'extrait.
+  function loudStart(buf) {
+    const data = buf.getChannelData(0);
+    const win = Math.floor(buf.sampleRate * 0.05);
+    const rms = [];
+    for (let i = 0; i + win <= data.length; i += win) {
+      let sum = 0;
+      for (let j = i; j < i + win; j++) sum += data[j] * data[j];
+      rms.push(Math.sqrt(sum / win));
+    }
+    const typical = [...rms].sort((a, b) => a - b)[Math.floor(rms.length * 0.6)] || 0;
+    const first = rms.findIndex((v) => v >= typical * 0.5);
+    // On garde 15 s d'écoute possibles après le point de départ.
+    return Math.min(Math.max(0, first) * 0.05, Math.max(0, buf.duration - 15.5));
+  }
+
+  function play(seconds, barIndex = state.stage) {
+    if (!state.buffer) return;
+    stop();
+    const ac = audio();
+    if (ac.state === "suspended") ac.resume();
+    const src = ac.createBufferSource();
+    const gain = ac.createGain();
+    src.buffer = state.buffer;
+    src.connect(gain).connect(ac.destination);
+    // Micro-fondu pour éviter les clics sur les extraits ultra-courts.
+    const t0 = ac.currentTime + 0.02;
+    const fade = Math.min(0.008, seconds / 4);
+    gain.gain.setValueAtTime(0, t0);
+    gain.gain.linearRampToValueAtTime(1, t0 + fade);
+    gain.gain.setValueAtTime(1, t0 + seconds - fade);
+    gain.gain.linearRampToValueAtTime(0, t0 + seconds);
+    src.start(t0, state.offset, seconds);
+    state.source = src;
+    src.onended = () => { if (state.source === src) stop(); };
+
+    $("artwork").classList.add("playing");
+    $("play").classList.add("is-playing");
+    // La barre avance dans la case de l'extrait en cours.
+    const bar = state.over ? null : $("stages").children[barIndex]?.querySelector(".bar");
+    const tick = () => {
+      const t = Math.max(0, ac.currentTime - t0);
+      if (bar) bar.style.width = `${Math.min(1, t / seconds) * 100}%`;
+      if (t < seconds) state.raf = requestAnimationFrame(tick);
+    };
+    tick();
+  }
+
+  // ---------- Partie ----------
+  function pickSong() {
+    const list = SONGS;
+    if (!list.length) return null;
+    let fresh = list.filter((s) => !state.recent.includes(s.id));
+    if (!fresh.length) { state.recent = []; fresh = list; }
+    const song = fresh[Math.floor(Math.random() * fresh.length)];
+    state.recent.push(song.id);
+    if (state.recent.length > Math.floor(list.length * 0.8)) state.recent.shift();
+    return song;
+  }
+
+  // La prochaine chanson se télécharge pendant qu'on joue la courante.
+  let preload = null;
+  function preloadNext() {
+    const song = pickSong();
+    if (!song) return;
+    preload = { song, buf: load(song).catch(() => null) };
+  }
+
+  // Les navigateurs bloquent le son avant un premier geste ; après, on enchaîne tout seul.
+  let interacted = false;
+  for (const ev of ["pointerdown", "keydown"]) addEventListener(ev, () => (interacted = true), { once: true, capture: true });
+
+  let loadToken = 0;
+  async function newRound() {
+    stop();
+    state.stage = 0;
+    state.over = false;
+    state.buffer = null;
+    state.results = [];
+    state.guessed = new Set();
+    const pre = preload;
+    preload = null;
+    state.song = pre ? pre.song : pickSong();
+    state.round += 1;
+    $("round").textContent = `Chanson ${state.round}`;
+    $("attempts").innerHTML = "";
+    $("reveal").hidden = true;
+    $("searchBox").hidden = false;
+    $("verdict").hidden = true;
+    $("songMeta").hidden = true;
+    $("songTitle").textContent = QUESTION;
+    $("songArtist").textContent = HINT;
+    document.querySelector(".heading").classList.remove("revealed");
+    $("artwork").classList.remove("revealed");
+    $("artwork").classList.add("idle");
+    $("guess").value = "";
+    $("guess").disabled = $("skip").disabled = !state.song;
+    closeSuggest();
+    renderTimeline();
+    if (!state.song) { setStatus(""); $("play").disabled = true; return; }
+
+    const token = ++loadToken;
+    const song = state.song;
+    $("play").classList.add("loading");
+    setStatus("Chargement…");
+    try {
+      const buf = (pre && pre.song === song && (await pre.buf)) || (await load(song));
+      if (token !== loadToken) return;
+      state.buffer = buf;
+      state.offset = loudStart(buf);
+      setStatus("Prêt");
+      $("play").classList.remove("loading");
+      if (interacted) play(stages()[0]);
+      preloadNext();
+    } catch (e) {
+      if (token !== loadToken) return;
+      console.warn("Extrait introuvable, on passe à la suivante", song, e);
+      state.recent.push(song.id);
+      return newRound();
+    } finally {
+      if (token === loadToken) $("play").classList.remove("loading");
+      $("play").disabled = false;
+    }
+  }
+
+  function setStatus(t) { $("status").textContent = t; }
+
+  function addAttempt(kind, text) {
+    state.results[state.stage] = kind;
+    // Les extraits allongés se voient déjà dans les capsules ; la liste ne garde que les essais ratés.
+    if (kind !== "wrong") return;
+    const li = document.createElement("li");
+    li.className = kind;
+    const mark = '<svg viewBox="0 0 12 12"><path d="m3 3 6 6m0-6-6 6"/></svg>';
+    li.innerHTML = `<span class="t">${fmt(stages()[state.stage])}</span><span class="mark">${mark}</span><span class="txt"></span>`;
+    li.querySelector(".txt").textContent = text;
+    $("attempts").append(li);
+  }
+
+  function advance(delay = 0) {
+    if (state.stage >= stages().length - 1) return finish(false);
+    state.stage++;
+    renderTimeline();
+    const stage = state.stage;
+    setTimeout(() => { if (!state.over && state.stage === stage) play(stages()[stage]); }, delay);
+  }
+
+  function guess(song) {
+    if (state.over || !state.song) return;
+    if (song.id === state.song.id || (norm(song.title) === norm(state.song.title) && song.artist === state.song.artist)) {
+      addAttempt("right", `${song.title} — ${song.artist}`);
+      finish(true);
+    } else {
+      addAttempt("wrong", `${song.title} — ${song.artist}`);
+      state.guessed.add(song.id);
+      sfx.wrong();
+      stop();
+      const box = $("searchBox");
+      box.classList.remove("shake"); void box.offsetWidth; box.classList.add("shake");
+      // Laisse le son du mauvais essai finir avant l'extrait plus long.
+      advance(450);
+    }
+  }
+
+  function finish(won) {
+    const stage = state.stage;
+    state.over = true;
+    stop();
+    const s = state.song;
+    let msg;
+    if (won) {
+      const pts = POINTS[stage];
+      state.points += pts;
+      state.streak += 1;
+      msg = stage === 0 ? `Du premier coup · +${pts}` : `Trouvée en ${fmt(stages()[stage])} · +${pts}`;
+      sfx.right(stage);
+      renderScore(pts);
+    } else {
+      state.streak = 0;
+      msg = "Pas cette fois";
+      sfx.lose();
+      renderScore();
+    }
+    store.set("points", state.points);
+    store.set("streak", state.streak);
+    renderTimeline();
+    $("verdict").textContent = msg;
+    $("verdict").className = "verdict " + (won ? "win" : "lose");
+    $("verdict").hidden = false;
+    $("songTitle").textContent = s.title;
+    $("songArtist").textContent = s.artist;
+    $("songMeta").textContent = `${s.year} · ${s.genre}`;
+    $("songMeta").hidden = false;
+    document.querySelector(".heading").classList.add("revealed");
+    $("art").src = s.art;
+    $("art").alt = `Pochette — ${s.title}`;
+    $("artwork").classList.remove("idle");
+    $("artwork").classList.add("revealed");
+    setBackdrop(s.art);
+    state.history.unshift({ song: s, won, stage });
+    renderHistory();
+    openInMusic(s);
+    $("searchBox").hidden = true;
+    $("reveal").hidden = false;
+    $("guess").disabled = $("skip").disabled = true;
+    closeSuggest();
+    setStatus(`${s.title}, ${s.artist}`);
+    $("next").focus();
+    // La récompense : la chanson joue, après le carillon.
+    setTimeout(() => { if (state.over && state.song === s) play(Math.min(REVEAL_LEN, state.buffer?.duration ?? REVEAL_LEN)); }, won ? 650 : 900);
+  }
+
+  // Bouton « Ouvrir dans Musique » : music:// ouvre l'app Musique du Mac.
+  // On part d'une recherche, puis on pointe vers la piste exacte si iTunes la trouve.
+  function openInMusic(song) {
+    const link = $("apple");
+    const term = `${song.artist} ${song.title}`;
+    link.href = `music://music.apple.com/ca/search?term=${encodeURIComponent(term)}`;
+    const cb = `__it${song.id}`;
+    const script = document.createElement("script");
+    const done = () => { delete window[cb]; script.remove(); };
+    window[cb] = (data) => {
+      done();
+      if (state.song !== song) return;
+      const want = norm(song.title);
+      const artist = norm(song.artist).replace(/ /g, "");
+      const hit = (data.results || []).find((r) =>
+        norm(r.artistName || "").replace(/ /g, "").includes(artist) &&
+        norm(r.trackName || "").startsWith(want));
+      if (hit) link.href = hit.trackViewUrl.replace(/^https:/, "music:").replace(/&uo=\d+/, "");
+    };
+    script.onerror = done;
+    script.src = `https://itunes.apple.com/search?${new URLSearchParams({ term, country: "CA", entity: "song", limit: "10", callback: cb })}`;
+    document.head.append(script);
+  }
+
+  // Le serveur local (server.py) ouvre le lien avec `open`, parce que plusieurs
+  // navigateurs bloquent music://. Sans serveur, on tente le lien direct.
+  $("apple").addEventListener("click", async (e) => {
+    e.preventDefault();
+    const url = $("apple").href;
+    try {
+      const res = await fetch(`/api/open-in-music?${new URLSearchParams({ url })}`, { method: "POST" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch {
+      location.href = url;
+    }
+  });
+
+  // Avec un gain, les points montent en comptant plutôt que de sauter.
+  // Les chansons de la partie, la plus récente d'abord : cover, titre, et à quel extrait on l'a eue.
+  function renderHistory() {
+    $("historyWrap").hidden = !state.history.length;
+    $("history").innerHTML = "";
+    for (const { song, won, stage } of state.history.slice(0, 24)) {
+      const li = document.createElement("li");
+      li.className = won ? "won" : "lost";
+      li.innerHTML = `<img alt="" loading="lazy"><span class="info"><b></b><span></span></span><span class="chip"></span>`;
+      li.querySelector("img").src = song.art;
+      li.querySelector("b").textContent = song.title;
+      li.querySelector(".info span").textContent = song.artist;
+      li.querySelector(".chip").textContent = won ? fmt(stages()[stage]) : "Ratée";
+      li.title = `${song.title} — ${song.artist}`;
+      $("history").append(li);
+    }
+  }
+
+  function renderScore(gain = 0) {
+    const el = $("points");
+    const end = state.points;
+    $("streak").textContent = state.streak;
+    if (!gain) { el.textContent = end.toLocaleString("fr-CA"); return; }
+    const start = end - gain, t0 = performance.now(), dur = 600;
+    const step = (now) => {
+      const k = Math.min(1, (now - t0) / dur);
+      el.textContent = Math.round(start + gain * (1 - (1 - k) ** 3)).toLocaleString("fr-CA");
+      if (k < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+    for (const b of [el, $("streak")]) {
+      b.classList.remove("bump"); void b.offsetWidth; b.classList.add("bump");
+      b.addEventListener("animationend", () => b.classList.remove("bump"), { once: true });
+    }
+  }
+
+
+
+  // ---------- Autocomplétion ----------
+  const choices = [...new Map(SONGS.map((s) => [norm(s.title) + "|" + s.artist, s])).values()]
+    .map((s) => ({ song: s, key: norm(s.title + " " + s.artist), title: norm(s.title) }));
+  let active = -1;
+  let shown = [];
+
+  function closeSuggest() { $("suggest").hidden = true; active = -1; shown = []; $("guess").removeAttribute("aria-activedescendant"); }
+
+  function renderSuggest() {
+    const q = norm($("guess").value);
+    if (!q) return closeSuggest();
+    const words = q.split(" ");
+    shown = choices
+      .filter((c) => words.every((w) => c.key.includes(w)) && !state.guessed?.has(c.song.id))
+      .sort((a, b) => (b.title.startsWith(q) - a.title.startsWith(q)) || a.title.localeCompare(b.title))
+      .slice(0, 8);
+    const ul = $("suggest");
+    ul.innerHTML = "";
+    if (!shown.length) return closeSuggest();
+    active = 0;
+    shown.forEach((c, i) => {
+      const li = document.createElement("li");
+      li.id = "opt-" + i;
+      li.setAttribute("role", "option");
+      li.setAttribute("aria-selected", String(i === active));
+      li.textContent = c.song.title;
+      const small = document.createElement("small");
+      small.textContent = c.song.artist;
+      li.append(small);
+      li.onmousedown = (e) => { e.preventDefault(); choose(i); };
+      ul.append(li);
+    });
+    ul.hidden = false;
+    $("guess").setAttribute("aria-activedescendant", "opt-0");
+  }
+
+  function highlight(i) {
+    active = (i + shown.length) % shown.length;
+    [...$("suggest").children].forEach((li, j) => li.setAttribute("aria-selected", String(j === active)));
+    $("suggest").children[active]?.scrollIntoView({ block: "nearest" });
+    $("guess").setAttribute("aria-activedescendant", "opt-" + active);
+  }
+
+  function choose(i) {
+    const c = shown[i];
+    if (!c) return;
+    $("guess").value = "";
+    closeSuggest();
+    guess(c.song);
+  }
+
+  $("guess").addEventListener("input", renderSuggest);
+  $("guess").addEventListener("blur", () => setTimeout(closeSuggest, 100));
+  $("guess").addEventListener("keydown", (e) => {
+    if (e.key === "ArrowDown" && shown.length) { e.preventDefault(); highlight(active + 1); }
+    else if (e.key === "ArrowUp" && shown.length) { e.preventDefault(); highlight(active - 1); }
+    else if (e.key === "Enter" && shown.length) { e.preventDefault(); choose(active); }
+    else if (e.key === "Enter" && !$("guess").value.trim()) { e.preventDefault(); $("play").click(); }
+    else if (e.key === "Escape") closeSuggest();
+  });
+
+  // ---------- Contrôles ----------
+  $("play").onclick = () => {
+    if (state.source) return stop();
+    if (state.over) return play(Math.min(REVEAL_LEN, state.buffer?.duration ?? REVEAL_LEN));
+    play(stages()[state.stage]);
+  };
+  $("skip").onclick = () => {
+    if (state.over || !state.song) return;
+    if (state.stage >= stages().length - 1) {
+      state.results[state.stage] = "skipped";
+      return finish(false);
+    }
+    addAttempt("skipped", "Extrait plus long");
+    sfx.skip();
+    advance();
+  };
+  $("next").onclick = newRound;
+
+  document.addEventListener("keydown", (e) => {
+    if (e.target.tagName === "INPUT") return;
+    if (e.code === "Space") { e.preventDefault(); $("play").click(); }
+    else if (e.key === "Enter" && state.over) { e.preventDefault(); newRound(); }
+  });
+
+  renderScore();
+  newRound();
+})();
