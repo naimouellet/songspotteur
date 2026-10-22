@@ -242,9 +242,11 @@ svg { fill: currentColor; stroke: currentColor; }
 .history[hidden] { display: none; }
 .history h2 { margin: 0 0 10px; font: 600 15px/1 var(--display); color: var(--label-2); }
 #history {
-  list-style: none; margin: 0; padding: 0 0 10px; display: grid; grid-auto-flow: column; grid-auto-columns: 232px;
-  gap: 10px; overflow-x: auto; scroll-snap-type: x proximity; scrollbar-width: thin;
+  list-style: none; margin: 0; padding: 0; display: grid; grid-auto-flow: column; grid-auto-columns: 232px;
+  gap: 10px; overflow-x: auto; scroll-snap-type: x proximity; scrollbar-width: none;
 }
+/* Scrollbar hidden: the strip scrolls by wheel, drag, trackpad or touch. */
+#history::-webkit-scrollbar { display: none; }
 #history li {
   scroll-snap-align: start; display: grid; grid-template-columns: 48px 1fr auto; align-items: center; gap: 10px;
   padding: 8px 10px 8px 8px; border-radius: 12px; background: var(--material);
