@@ -243,6 +243,7 @@
     $("artwork").classList.add("idle");
     window.Viz?.setActive(true);
     $("guess").value = "";
+    $("clear").hidden = true;
     $("guess").disabled = $("skip").disabled = !state.song;
     closeSuggest();
     renderTimeline();
@@ -483,11 +484,16 @@
     const c = shown[i];
     if (!c) return;
     $("guess").value = "";
+    $("clear").hidden = true;
     closeSuggest();
     guess(c.song);
   }
 
-  $("guess").addEventListener("input", renderSuggest);
+  // Bouton d'effacement maison : visible seulement quand il y a du texte.
+  const syncClear = () => { $("clear").hidden = !$("guess").value; };
+  $("guess").addEventListener("input", () => { syncClear(); renderSuggest(); });
+  $("clear").addEventListener("pointerdown", (e) => e.preventDefault()); // garde le focus dans le champ
+  $("clear").onclick = () => { $("guess").value = ""; syncClear(); closeSuggest(); $("guess").focus(); };
   $("guess").addEventListener("blur", () => setTimeout(closeSuggest, 100));
   $("guess").addEventListener("keydown", (e) => {
     if (e.key === "ArrowDown" && shown.length) { e.preventDefault(); highlight(active + 1); }

@@ -7,7 +7,7 @@
   <title>Songspotteur</title>
   <meta name="description" content="Reconnais une chanson québécoise à partir d'un extrait d'une demi-seconde.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231257e0'/%3E%3Cpath d='M13 10v12l9.5-6z' fill='white'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="style.css?v=fb6f90e3d1">
+  <link rel="stylesheet" href="style.css?v=8012164435">
 </head>
 <body>
   <div class="backdrop" aria-hidden="true"><div class="layer" id="bgA"></div><div class="layer" id="bgB"></div></div>
@@ -48,6 +48,7 @@
     <div class="search" id="searchBox">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6" fill="none" stroke-width="2"/><path d="m15 15 5 5" stroke-width="2" stroke-linecap="round"/></svg>
       <input id="guess" type="search" autocomplete="off" spellcheck="false" placeholder="Titre de la chanson" aria-label="Titre de la chanson" aria-autocomplete="list" aria-controls="suggest">
+      <button class="clear" id="clear" type="button" aria-label="Effacer" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="8"/><path d="m5.5 5.5 5 5m0-5-5 5"/></svg></button>
       <ul id="suggest" class="group" role="listbox" hidden></ul>
     </div>
 
@@ -67,7 +68,7 @@
   <footer class="fineprint">VLMQ · Extraits Deezer · Inspiré de <a href="https://songspot.co" target="_blank" rel="noopener">songspot</a></footer>
 
   <script src="songs.js?v=0572801450"></script>
-  <script src="viz.js?v=c037d5c36a"></script>
-  <script src="app.js?v=a8a86b0693"></script>
+  <script src="viz.js?v=13d87ae254"></script>
+  <script src="app.js?v=26f7c5b53b"></script>
 </body>
 </html>

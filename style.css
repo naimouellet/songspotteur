@@ -171,7 +171,14 @@ svg { fill: currentColor; stroke: currentColor; }
 .search > svg { width: 18px; height: 18px; flex: none; fill: none; color: var(--label-2); }
 #guess { flex: 1; min-width: 0; height: 100%; border: 0; outline: none; background: transparent; font-size: 17px; }
 #guess::placeholder { color: var(--label-3); }
-#guess::-webkit-search-cancel-button { filter: invert(1) opacity(.5); }
+/* Native clear button replaced by our own (below): it rendered differently per browser. */
+#guess::-webkit-search-cancel-button, #guess::-webkit-search-decoration { -webkit-appearance: none; appearance: none; display: none; }
+.clear { width: 22px; height: 22px; flex: none; display: grid; place-items: center; border-radius: 50%; }
+.clear[hidden] { display: none; }
+.clear svg { width: 17px; height: 17px; }
+.clear circle { fill: var(--label-3); stroke: none; transition: fill .15s; }
+.clear path { fill: none; stroke: #1c1c1e; stroke-width: 1.7; stroke-linecap: round; }
+.clear:hover circle { fill: var(--label-2); }
 .search:focus-within { background: var(--fill-2); }
 .search.shake { animation: shake .4s cubic-bezier(.36, .07, .19, .97); box-shadow: inset 0 0 0 1.5px var(--red); }
 @keyframes shake { 20%, 60% { transform: translateX(-7px); } 40%, 80% { transform: translateX(7px); } }
