@@ -429,6 +429,39 @@
     requestAnimationFrame(() => list.scrollTo({ left: list.scrollWidth, behavior: "smooth" }));
   }
 
+  // Bande d'historique à la souris : la molette fait défiler à l'horizontale, et on
+  // peut glisser la bande. Un glissement n'ouvre pas la carte sous le curseur.
+  const strip = $("history");
+  strip.addEventListener("wheel", (e) => {
+    if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return; // le trackpad défile déjà à l'horizontale
+    const max = strip.scrollWidth - strip.clientWidth;
+    if (max <= 0) return;
+    // Aux extrémités, on rend la molette à la page.
+    if ((e.deltaY < 0 && strip.scrollLeft <= 0) || (e.deltaY > 0 && strip.scrollLeft >= max - 1)) return;
+    e.preventDefault();
+    strip.scrollBy({ left: e.deltaY * (e.deltaMode === 1 ? 32 : 1) });
+  }, { passive: false });
+
+  let drag = null;
+  strip.addEventListener("pointerdown", (e) => {
+    if (e.pointerType !== "mouse" || e.button !== 0) return;
+    drag = { x: e.clientX, left: strip.scrollLeft, moved: false };
+  });
+  addEventListener("pointermove", (e) => {
+    if (!drag) return;
+    const dx = e.clientX - drag.x;
+    if (!drag.moved && Math.abs(dx) > 5) { drag.moved = true; strip.classList.add("dragging"); }
+    if (drag.moved) strip.scrollLeft = drag.left - dx;
+  });
+  addEventListener("pointerup", () => {
+    if (drag?.moved) {
+      // Avale le clic qui suit un glissement.
+      strip.addEventListener("click", (e) => { e.stopPropagation(); e.preventDefault(); }, { capture: true, once: true });
+      setTimeout(() => strip.classList.remove("dragging"), 0);
+    }
+    drag = null;
+  });
+
   function historyCard({ song, won, label }) {
     const li = document.createElement("li");
     li.className = won ? "won" : "lost";

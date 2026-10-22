@@ -252,6 +252,10 @@ svg { fill: currentColor; stroke: currentColor; }
 }
 #history li:last-child { animation: card-in .45s var(--spring); }
 @keyframes card-in { from { opacity: 0; transform: translateX(16px) scale(.96); } }
+/* While dragging with the mouse: grab cursor, no snapping, no text selection. */
+#history.dragging { cursor: grabbing; scroll-snap-type: none; user-select: none; }
+#history.dragging li { cursor: grabbing; pointer-events: none; }
+#history img { -webkit-user-drag: none; user-select: none; }
 #history li { cursor: pointer; transition: background .15s, transform .15s var(--spring); }
 #history li:hover { background: rgba(60, 60, 64, .7); }
 #history li:active { transform: scale(.97); }
