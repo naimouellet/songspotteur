@@ -155,7 +155,7 @@ svg { fill: currentColor; stroke: currentColor; }
 .play:active { transform: scale(.9); }
 .play:disabled { opacity: .4; cursor: default; transform: none; }
 .play svg { width: 34px; height: 34px; grid-area: 1 / 1; stroke: none; }
-.play .icon-play { margin-left: 1px; } /* puts the triangle's centre of mass on the circle's centre */
+.play .icon-play { margin-left: -2px; } /* the path already leans right; this leaves a slight optical nudge (~2px) */
 .play .icon-load { display: none; fill: none; stroke: #fff; animation: spin .8s linear infinite; }
 .play .icon-pause { display: none; }
 .play.is-playing .icon-play { display: none; }
@@ -189,7 +189,13 @@ svg { fill: currentColor; stroke: currentColor; }
 .group li { position: relative; padding: 11px 16px; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .group li + li::before { content: ""; position: absolute; top: 0; left: 16px; right: 0; height: 1px; background: var(--separator); }
 #suggest { position: absolute; left: 0; right: 0; top: calc(100% + 8px); z-index: 5; max-height: 330px; overflow-y: auto; box-shadow: 0 20px 50px rgba(0, 0, 0, .5); background: #2c2c2e; }
+/* Opaque, so no backdrop blur: with it, Chrome can let a highlighted row's square
+   corners poke past the rounded edge. The end rows also carry the radius themselves. */
+#suggest { backdrop-filter: none; -webkit-backdrop-filter: none; }
 #suggest li { cursor: pointer; }
+#suggest li:first-child { border-radius: 12px 12px 0 0; }
+#suggest li:last-child { border-radius: 0 0 12px 12px; }
+#suggest li:only-child { border-radius: 12px; }
 #suggest li small { color: var(--label-2); font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 45%; }
 #suggest li[aria-selected="true"] { background: rgba(255, 255, 255, .1); }
 
