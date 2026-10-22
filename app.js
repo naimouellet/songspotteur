@@ -354,7 +354,7 @@
     // Le visualiseur s'arrête une fois la pochette affichée (après le fondu).
     setTimeout(() => { if (state.over) window.Viz?.setActive(false); }, 700);
     setBackdrop(s.art);
-    state.history.unshift({ song: s, won, stage });
+    state.history.unshift({ song: s, won, label: won ? fmt(stages()[stage]) : "Ratée" });
     renderHistory();
     openInMusic(s);
     $("searchBox").hidden = true;
@@ -367,56 +367,74 @@
     setTimeout(() => { if (state.over && state.song === s) play(Math.min(REVEAL_LEN, state.buffer?.duration ?? REVEAL_LEN)); }, won ? 650 : 900);
   }
 
-  // Bouton « Ouvrir dans Musique » : music:// ouvre l'app Musique du Mac.
-  // On part d'une recherche, puis on pointe vers la piste exacte si iTunes la trouve.
+  // Liens Apple Music : music:// ouvre l'app Musique du Mac. On part d'une recherche,
+  // puis on pointe vers la piste exacte si iTunes la trouve. Résultat mis en cache
+  // par chanson : le bouton et l'historique le réutilisent.
+  const musicLinks = new Map();
+  const searchLink = (song) => `music://music.apple.com/ca/search?term=${encodeURIComponent(`${song.artist} ${song.title}`)}`;
+
+  function lookupMusic(song) {
+    if (musicLinks.has(song.id)) return musicLinks.get(song.id);
+    const found = new Promise((resolve) => {
+      const cb = `__it${song.id}`;
+      const script = document.createElement("script");
+      const done = (url) => { delete window[cb]; script.remove(); clearTimeout(timer); resolve(url); };
+      const timer = setTimeout(() => done(searchLink(song)), 5000);
+      window[cb] = (data) => {
+        const want = norm(song.title);
+        const artist = norm(song.artist).replace(/ /g, "");
+        const hit = (data.results || []).find((r) =>
+          norm(r.artistName || "").replace(/ /g, "").includes(artist) &&
+          norm(r.trackName || "").startsWith(want));
+        done(hit ? hit.trackViewUrl.replace(/^https:/, "music:").replace(/&uo=\d+/, "") : searchLink(song));
+      };
+      script.onerror = () => done(searchLink(song));
+      script.src = `https://itunes.apple.com/search?${new URLSearchParams({ term: `${song.artist} ${song.title}`, country: "CA", entity: "song", limit: "10", callback: cb })}`;
+      document.head.append(script);
+    });
+    musicLinks.set(song.id, found);
+    return found;
+  }
+
   function openInMusic(song) {
     const link = $("apple");
-    const term = `${song.artist} ${song.title}`;
-    link.href = `music://music.apple.com/ca/search?term=${encodeURIComponent(term)}`;
-    const cb = `__it${song.id}`;
-    const script = document.createElement("script");
-    const done = () => { delete window[cb]; script.remove(); };
-    window[cb] = (data) => {
-      done();
-      if (state.song !== song) return;
-      const want = norm(song.title);
-      const artist = norm(song.artist).replace(/ /g, "");
-      const hit = (data.results || []).find((r) =>
-        norm(r.artistName || "").replace(/ /g, "").includes(artist) &&
-        norm(r.trackName || "").startsWith(want));
-      if (hit) link.href = hit.trackViewUrl.replace(/^https:/, "music:").replace(/&uo=\d+/, "");
-    };
-    script.onerror = done;
-    script.src = `https://itunes.apple.com/search?${new URLSearchParams({ term, country: "CA", entity: "song", limit: "10", callback: cb })}`;
-    document.head.append(script);
+    link.href = searchLink(song);
+    lookupMusic(song).then((url) => { if (state.song === song) link.href = url; });
   }
 
   // Le serveur local (server.py) ouvre le lien avec `open`, parce que plusieurs
-  // navigateurs bloquent music://. Sans serveur, on tente le lien direct.
-  $("apple").addEventListener("click", async (e) => {
-    e.preventDefault();
-    const url = $("apple").href;
+  // navigateurs bloquent music://. Sans serveur (site publié), on suit le lien direct.
+  async function openUrl(url) {
     try {
       const res = await fetch(`/api/open-in-music?${new URLSearchParams({ url })}`, { method: "POST" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
     } catch {
       location.href = url;
     }
-  });
+  }
+
+  $("apple").addEventListener("click", (e) => { e.preventDefault(); openUrl($("apple").href); });
 
   // Avec un gain, les points montent en comptant plutôt que de sauter.
   // Les chansons de la partie, la plus récente d'abord : cover, titre, et à quel extrait on l'a eue.
   function renderHistory() {
     $("historyWrap").hidden = !state.history.length;
     $("history").innerHTML = "";
-    for (const { song, won, stage } of state.history.slice(0, 24)) {
+    for (const { song, won, label } of state.history.slice(0, 24)) {
       const li = document.createElement("li");
       li.className = won ? "won" : "lost";
+      // Chaque carte ouvre la chanson dans Apple Music.
+      li.tabIndex = 0;
+      li.setAttribute("role", "link");
+      li.setAttribute("aria-label", `Ouvrir ${song.title} de ${song.artist} dans Musique`);
+      const open = () => lookupMusic(song).then(openUrl);
+      li.onclick = open;
+      li.onkeydown = (e) => { if (e.key === "Enter") open(); };
       li.innerHTML = `<img alt="" loading="lazy"><span class="info"><b></b><span></span></span><span class="chip"></span>`;
       li.querySelector("img").src = song.art;
       li.querySelector("b").textContent = song.title;
       li.querySelector(".info span").textContent = song.artist;
-      li.querySelector(".chip").textContent = won ? fmt(stages()[stage]) : "Ratée";
+      li.querySelector(".chip").textContent = label;
       li.title = `${song.title} — ${song.artist}`;
       $("history").append(li);
     }

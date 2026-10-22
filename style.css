@@ -250,6 +250,9 @@ svg { fill: currentColor; stroke: currentColor; }
   backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px);
 }
 #history li:first-child { animation: slide .4s var(--spring); }
+#history li { cursor: pointer; transition: background .15s, transform .15s var(--spring); }
+#history li:hover { background: rgba(60, 60, 64, .7); }
+#history li:active { transform: scale(.97); }
 #history img { width: 48px; height: 48px; border-radius: 6px; object-fit: cover; background: var(--fill); }
 #history .info { min-width: 0; display: grid; }
 #history .info b, #history .info span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
