@@ -206,8 +206,8 @@ svg { fill: currentColor; stroke: currentColor; }
 .attempts { margin-top: -6px; }
 .attempts li { align-items: center; justify-content: flex-start; font-size: 15px; }
 .attempts .t { width: 44px; flex: none; color: var(--label-3); font-size: 13px; font-variant-numeric: tabular-nums; }
-/* Wrong guess: a thin red cross, no badge. */
-.attempts .mark { width: 14px; height: 14px; flex: none; display: grid; place-items: center; color: var(--red); }
+/* Wrong guess: a thin grey cross, no badge. */
+.attempts .mark { width: 14px; height: 14px; flex: none; display: grid; place-items: center; color: var(--label-3); }
 .attempts .mark svg { width: 10px; height: 10px; stroke-width: 1.6; fill: none; stroke-linecap: round; }
 .attempts li.wrong .txt { color: var(--label-2); }
 .attempts li.skipped .txt { color: var(--label-3); }
