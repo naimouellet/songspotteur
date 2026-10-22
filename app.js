@@ -354,8 +354,7 @@
     // Le visualiseur s'arrête une fois la pochette affichée (après le fondu).
     setTimeout(() => { if (state.over) window.Viz?.setActive(false); }, 700);
     setBackdrop(s.art);
-    state.history.unshift({ song: s, won, label: won ? fmt(stages()[stage]) : "Ratée" });
-    renderHistory();
+    addToHistory({ song: s, won, label: won ? fmt(stages()[stage]) : "Ratée" });
     openInMusic(s);
     $("searchBox").hidden = true;
     $("reveal").hidden = false;
@@ -417,27 +416,35 @@
 
   // Avec un gain, les points montent en comptant plutôt que de sauter.
   // Les chansons de la partie, la plus récente d'abord : cover, titre, et à quel extrait on l'a eue.
-  function renderHistory() {
-    $("historyWrap").hidden = !state.history.length;
-    $("history").innerHTML = "";
-    for (const { song, won, label } of state.history.slice(0, 24)) {
-      const li = document.createElement("li");
-      li.className = won ? "won" : "lost";
-      // Chaque carte ouvre la chanson dans Apple Music.
-      li.tabIndex = 0;
-      li.setAttribute("role", "link");
-      li.setAttribute("aria-label", `Ouvrir ${song.title} de ${song.artist} dans Musique`);
-      const open = () => lookupMusic(song).then(openUrl);
-      li.onclick = open;
-      li.onkeydown = (e) => { if (e.key === "Enter") open(); };
-      li.innerHTML = `<img alt="" loading="lazy"><span class="info"><b></b><span></span></span><span class="chip"></span>`;
-      li.querySelector("img").src = song.art;
-      li.querySelector("b").textContent = song.title;
-      li.querySelector(".info span").textContent = song.artist;
-      li.querySelector(".chip").textContent = label;
-      li.title = `${song.title} — ${song.artist}`;
-      $("history").append(li);
-    }
+  // Les chansons de la partie, dans l'ordre : la plus récente s'ajoute à la fin,
+  // et la bande glisse doucement jusqu'à elle.
+  const HISTORY_MAX = 24;
+  function addToHistory(entry) {
+    state.history.push(entry);
+    $("historyWrap").hidden = false;
+    const list = $("history");
+    list.append(historyCard(entry));
+    while (list.children.length > HISTORY_MAX) list.firstElementChild.remove();
+    requestAnimationFrame(() => list.scrollTo({ left: list.scrollWidth, behavior: "smooth" }));
+  }
+
+  function historyCard({ song, won, label }) {
+    const li = document.createElement("li");
+    li.className = won ? "won" : "lost";
+    // Chaque carte ouvre la chanson dans Apple Music.
+    li.tabIndex = 0;
+    li.setAttribute("role", "link");
+    li.setAttribute("aria-label", `Ouvrir ${song.title} de ${song.artist} dans Musique`);
+    const open = () => lookupMusic(song).then(openUrl);
+    li.onclick = open;
+    li.onkeydown = (e) => { if (e.key === "Enter") open(); };
+    li.innerHTML = `<img alt="" loading="lazy"><span class="info"><b></b><span></span></span><span class="chip"></span>`;
+    li.querySelector("img").src = song.art;
+    li.querySelector("b").textContent = song.title;
+    li.querySelector(".info span").textContent = song.artist;
+    li.querySelector(".chip").textContent = label;
+    li.title = `${song.title} — ${song.artist}`;
+    return li;
   }
 
   function renderScore(gain = 0) {

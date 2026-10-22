@@ -251,7 +251,8 @@ svg { fill: currentColor; stroke: currentColor; }
   padding: 8px 10px 8px 8px; border-radius: 12px; background: var(--material);
   backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px);
 }
-#history li:first-child { animation: slide .4s var(--spring); }
+#history li:last-child { animation: card-in .45s var(--spring); }
+@keyframes card-in { from { opacity: 0; transform: translateX(16px) scale(.96); } }
 #history li { cursor: pointer; transition: background .15s, transform .15s var(--spring); }
 #history li:hover { background: rgba(60, 60, 64, .7); }
 #history li:active { transform: scale(.97); }
