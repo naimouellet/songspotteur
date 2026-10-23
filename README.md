@@ -1,4 +1,4 @@
-# Musiquiz QC (version publiée)
+# MusiQuiz QC (version publiée)
 
 Reconnais une chanson québécoise à partir d'un extrait d'une demi-seconde.
 
